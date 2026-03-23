@@ -155,9 +155,8 @@ impl Escrow {
     /// - Caller is not the client
     /// - Contract is not in Created status
     /// - Amount doesn't match total milestone amounts
-    pub fn deposit_funds(env: Env, _contract_id: u32, amount: i128) -> bool {
-        // Get caller
-        let caller = env.current_contract_address();
+    pub fn deposit_funds(env: Env, _contract_id: u32, caller: Address, amount: i128) -> bool {
+        caller.require_auth();
 
         // In real implementation, retrieve contract from storage
         // For now, we'll use a simplified approach
@@ -213,8 +212,13 @@ impl Escrow {
     /// - Milestone ID is invalid
     /// - Milestone already released
     /// - Milestone already approved by this caller
-    pub fn approve_milestone_release(env: Env, _contract_id: u32, milestone_id: u32) -> bool {
-        let caller = env.current_contract_address();
+    pub fn approve_milestone_release(
+        env: Env,
+        _contract_id: u32,
+        caller: Address,
+        milestone_id: u32,
+    ) -> bool {
+        caller.require_auth();
 
         // Retrieve contract
         let mut contract: EscrowContract = env
@@ -298,7 +302,13 @@ impl Escrow {
     /// - Milestone ID is invalid
     /// - Milestone already released
     /// - Insufficient approvals based on authorization scheme
-    pub fn release_milestone(env: Env, _contract_id: u32, milestone_id: u32) -> bool {
+    pub fn release_milestone(
+        env: Env,
+        _contract_id: u32,
+        caller: Address,
+        milestone_id: u32,
+    ) -> bool {
+        caller.require_auth();
         // Retrieve contract
         let mut contract: EscrowContract = env
             .storage()

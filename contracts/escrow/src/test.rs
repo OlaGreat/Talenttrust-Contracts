@@ -46,7 +46,7 @@ fn test_create_contract_with_arbiter() {
     let id = client.create_contract(
         &client_addr, 
         &freelancer_addr, 
-        &Some(arbiter_addr), 
+        &Some(arbiter_addr.clone()), 
         &milestones, 
         &ReleaseAuthorization::ClientAndArbiter
     );
@@ -134,7 +134,8 @@ fn test_deposit_funds() {
     // Note: Authentication tests would require proper mock setup
     // For now, we test the basic contract creation logic
 
-    let result = client.deposit_funds(&1, &1000_0000000);
+    env.mock_all_auths();
+    let result = client.deposit_funds(&1, &client_addr, &1000_0000000);
     assert!(result);
 }
 
@@ -161,7 +162,8 @@ fn test_deposit_funds_wrong_amount() {
     // Note: Authentication tests would require proper mock setup
     // For now, we test the basic contract creation logic
 
-    client.deposit_funds(&1, &500_0000000);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &500_0000000);
 }
 
 #[test]
@@ -183,7 +185,9 @@ fn test_approve_milestone_release_client_only() {
         &ReleaseAuthorization::ClientOnly
     );
 
-    let result = client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    let result = client.approve_milestone_release(&1, &client_addr, &0);
     assert!(result);
 }
 
@@ -207,10 +211,12 @@ fn test_approve_milestone_release_client_and_arbiter() {
         &ReleaseAuthorization::ClientAndArbiter
     );
 
-    let result = client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    let result = client.approve_milestone_release(&1, &client_addr, &0);
     assert!(result);
 
-    let result = client.approve_milestone_release(&1, &0);
+    let result = client.approve_milestone_release(&1, &arbiter_addr, &0);
     assert!(result);
 }
 
@@ -235,7 +241,9 @@ fn test_approve_milestone_release_unauthorized() {
         &ReleaseAuthorization::ClientOnly
     );
 
-    client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    client.approve_milestone_release(&1, &unauthorized_addr, &0);
 }
 
 #[test]
@@ -258,7 +266,9 @@ fn test_approve_milestone_release_invalid_id() {
         &ReleaseAuthorization::ClientOnly
     );
 
-    client.approve_milestone_release(&1, &5);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    client.approve_milestone_release(&1, &client_addr, &5);
 }
 
 #[test]
@@ -282,11 +292,13 @@ fn test_approve_milestone_release_already_approved() {
     );
 
     // First approval should succeed
-    let result = client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    let result = client.approve_milestone_release(&1, &client_addr, &0);
     assert!(result);
 
     // Second approval should fail
-    client.approve_milestone_release(&1, &0);
+    client.approve_milestone_release(&1, &client_addr, &0);
 }
 
 #[test]
@@ -308,9 +320,11 @@ fn test_release_milestone_client_only() {
         &ReleaseAuthorization::ClientOnly
     );
 
-    client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    client.approve_milestone_release(&1, &client_addr, &0);
 
-    let result = client.release_milestone(&1, &0);
+    let result = client.release_milestone(&1, &client_addr, &0);
     assert!(result);
 }
 
@@ -329,14 +343,16 @@ fn test_release_milestone_arbiter_only() {
     client.create_contract(
         &client_addr, 
         &freelancer_addr, 
-        &Some(arbiter_addr), 
+        &Some(arbiter_addr.clone()), 
         &milestones, 
         &ReleaseAuthorization::ArbiterOnly
     );
 
-    client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    client.approve_milestone_release(&1, &arbiter_addr, &0);
 
-    let result = client.release_milestone(&1, &0);
+    let result = client.release_milestone(&1, &arbiter_addr, &0);
     assert!(result);
 }
 
@@ -360,7 +376,9 @@ fn test_release_milestone_no_approval() {
         &ReleaseAuthorization::ClientOnly
     );
 
-    client.release_milestone(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    client.release_milestone(&1, &client_addr, &0);
 }
 
 #[test]
@@ -383,13 +401,15 @@ fn test_release_milestone_already_released() {
         &ReleaseAuthorization::ClientOnly
     );
 
-    client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    client.approve_milestone_release(&1, &client_addr, &0);
 
-    let result = client.release_milestone(&1, &0);
+    let result = client.release_milestone(&1, &client_addr, &0);
     assert!(result);
 
     // Try to release again
-    client.release_milestone(&1, &0);
+    client.release_milestone(&1, &client_addr, &0);
 }
 
 #[test]
@@ -412,9 +432,11 @@ fn test_release_milestone_multi_sig() {
         &ReleaseAuthorization::MultiSig
     );
 
-    client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &1000_0000000);
+    client.approve_milestone_release(&1, &client_addr, &0);
 
-    let result = client.release_milestone(&1, &0);
+    let result = client.release_milestone(&1, &client_addr, &0);
     assert!(result);
 }
 
@@ -437,13 +459,14 @@ fn test_contract_completion_all_milestones_released() {
         &ReleaseAuthorization::ClientOnly
     );
 
-    client.approve_milestone_release(&1, &0);
+    env.mock_all_auths();
+    client.deposit_funds(&1, &client_addr, &3000_0000000);
 
-    client.release_milestone(&1, &0);
+    client.approve_milestone_release(&1, &client_addr, &0);
+    client.release_milestone(&1, &client_addr, &0);
 
-    client.approve_milestone_release(&1, &1);
-
-    client.release_milestone(&1, &1);
+    client.approve_milestone_release(&1, &client_addr, &1);
+    client.release_milestone(&1, &client_addr, &1);
 
     // All milestones should be released and contract completed
     // Note: In a real implementation, we would check the contract status
