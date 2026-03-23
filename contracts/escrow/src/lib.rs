@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, Symbol, Vec, Map,
-    symbol_short
+    contract, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol, Vec,
 };
 
 #[contracttype]
@@ -68,17 +67,17 @@ pub struct Escrow;
 #[contractimpl]
 impl Escrow {
     /// Create a new escrow contract with milestone release authorization
-    /// 
+    ///
     /// # Arguments
     /// * `client` - Address of the client who funds the escrow
     /// * `freelancer` - Address of the freelancer who receives payments
     /// * `arbiter` - Optional arbiter address for dispute resolution
     /// * `milestone_amounts` - Vector of milestone payment amounts
     /// * `release_auth` - Authorization scheme for milestone releases
-    /// 
+    ///
     /// # Returns
     /// Contract ID for the newly created escrow
-    /// 
+    ///
     /// # Errors
     /// Panics if:
     /// - Milestone amounts vector is empty
@@ -96,11 +95,11 @@ impl Escrow {
         if milestone_amounts.is_empty() {
             panic!("At least one milestone required");
         }
-        
+
         if client == freelancer {
             panic!("Client and freelancer cannot be the same address");
         }
-        
+
         // Validate milestone amounts
         for i in 0..milestone_amounts.len() {
             let amount = milestone_amounts.get(i).unwrap();
@@ -108,7 +107,7 @@ impl Escrow {
                 panic!("Milestone amounts must be positive");
             }
         }
-        
+
         // Create milestones
         let mut milestones = Vec::new(&env);
         for i in 0..milestone_amounts.len() {
@@ -119,7 +118,7 @@ impl Escrow {
                 approval_timestamp: None,
             });
         }
-        
+
         // Create contract
         let contract_data = EscrowContract {
             client: client.clone(),
@@ -130,25 +129,27 @@ impl Escrow {
             release_auth,
             created_at: env.ledger().timestamp(),
         };
-        
+
         // Generate contract ID (in real implementation, this would use proper storage)
         let contract_id = env.ledger().sequence();
-        
+
         // Store contract data (simplified for this implementation)
-        env.storage().persistent().set(&symbol_short!("contract"), &contract_data);
-        
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("contract"), &contract_data);
+
         contract_id
     }
 
     /// Deposit funds into escrow. Only the client may call this.
-    /// 
+    ///
     /// # Arguments
     /// * `contract_id` - ID of the escrow contract
     /// * `amount` - Amount to deposit (must equal total milestone amounts)
-    /// 
+    ///
     /// # Returns
     /// true if deposit successful
-    /// 
+    ///
     /// # Errors
     /// Panics if:
     /// - Caller is not the client
@@ -157,50 +158,54 @@ impl Escrow {
     pub fn deposit_funds(env: Env, _contract_id: u32, amount: i128) -> bool {
         // Get caller
         let caller = env.current_contract_address();
-        
+
         // In real implementation, retrieve contract from storage
         // For now, we'll use a simplified approach
-        let contract: EscrowContract = env.storage().persistent()
+        let contract: EscrowContract = env
+            .storage()
+            .persistent()
             .get(&symbol_short!("contract"))
             .unwrap_or_else(|| panic!("Contract not found"));
-        
+
         // Verify caller is client
         if caller != contract.client {
             panic!("Only client can deposit funds");
         }
-        
+
         // Verify contract status
         if contract.status != ContractStatus::Created {
             panic!("Contract must be in Created status to deposit funds");
         }
-        
+
         // Calculate total required amount
         let mut total_required = 0i128;
         for i in 0..contract.milestones.len() {
             total_required += contract.milestones.get(i).unwrap().amount;
         }
-        
+
         if amount != total_required {
             panic!("Deposit amount must equal total milestone amounts");
         }
-        
+
         // Update contract status to Funded
         let mut updated_contract = contract;
         updated_contract.status = ContractStatus::Funded;
-        env.storage().persistent().set(&symbol_short!("contract"), &updated_contract);
-        
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("contract"), &updated_contract);
+
         true
     }
 
     /// Approve a milestone for release with proper authorization
-    /// 
+    ///
     /// # Arguments
     /// * `contract_id` - ID of the escrow contract
     /// * `milestone_id` - ID of the milestone to approve
-    /// 
+    ///
     /// # Returns
     /// true if approval successful
-    /// 
+    ///
     /// # Errors
     /// Panics if:
     /// - Caller is not authorized to approve
@@ -210,77 +215,83 @@ impl Escrow {
     /// - Milestone already approved by this caller
     pub fn approve_milestone_release(env: Env, _contract_id: u32, milestone_id: u32) -> bool {
         let caller = env.current_contract_address();
-        
+
         // Retrieve contract
-        let mut contract: EscrowContract = env.storage().persistent()
+        let mut contract: EscrowContract = env
+            .storage()
+            .persistent()
             .get(&symbol_short!("contract"))
             .unwrap_or_else(|| panic!("Contract not found"));
-        
+
         // Verify contract status
         if contract.status != ContractStatus::Funded {
             panic!("Contract must be in Funded status to approve milestones");
         }
-        
+
         // Validate milestone ID
         if milestone_id >= contract.milestones.len() {
             panic!("Invalid milestone ID");
         }
-        
+
         let milestone = contract.milestones.get(milestone_id).unwrap();
-        
+
         // Check if milestone already released
         if milestone.released {
             panic!("Milestone already released");
         }
-        
+
         // Check authorization based on release_auth scheme
         let is_authorized = match contract.release_auth {
             ReleaseAuthorization::ClientOnly => caller == contract.client,
             ReleaseAuthorization::ArbiterOnly => {
                 contract.arbiter.clone().map_or(false, |a| caller == a)
-            },
+            }
             ReleaseAuthorization::ClientAndArbiter => {
-                caller == contract.client || 
-                contract.arbiter.clone().map_or(false, |a| caller == a)
-            },
+                caller == contract.client || contract.arbiter.clone().map_or(false, |a| caller == a)
+            }
             ReleaseAuthorization::MultiSig => {
                 // For multi-sig, both client and arbiter must approve
                 // This function handles individual approval
-                caller == contract.client || 
-                contract.arbiter.clone().map_or(false, |a| caller == a)
-            },
+                caller == contract.client || contract.arbiter.clone().map_or(false, |a| caller == a)
+            }
         };
-        
+
         if !is_authorized {
             panic!("Caller not authorized to approve milestone release");
         }
-        
+
         // Check if already approved by this caller
-        if milestone.approved_by.clone().map_or(false, |addr| addr == caller) {
+        if milestone
+            .approved_by
+            .clone()
+            .map_or(false, |addr| addr == caller)
+        {
             panic!("Milestone already approved by this address");
         }
-        
+
         // Update milestone approval
         let mut updated_milestone = milestone;
         updated_milestone.approved_by = Some(caller);
         updated_milestone.approval_timestamp = Some(env.ledger().timestamp());
-        
+
         // Update contract
         contract.milestones.set(milestone_id, updated_milestone);
-        env.storage().persistent().set(&symbol_short!("contract"), &contract);
-        
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("contract"), &contract);
+
         true
     }
-    
+
     /// Release a milestone payment to the freelancer after proper authorization
-    /// 
+    ///
     /// # Arguments
     /// * `contract_id` - ID of the escrow contract
     /// * `milestone_id` - ID of the milestone to release
-    /// 
+    ///
     /// # Returns
     /// true if release successful
-    /// 
+    ///
     /// # Errors
     /// Panics if:
     /// - Contract is not in Funded status
@@ -289,72 +300,86 @@ impl Escrow {
     /// - Insufficient approvals based on authorization scheme
     pub fn release_milestone(env: Env, _contract_id: u32, milestone_id: u32) -> bool {
         // Retrieve contract
-        let mut contract: EscrowContract = env.storage().persistent()
+        let mut contract: EscrowContract = env
+            .storage()
+            .persistent()
             .get(&symbol_short!("contract"))
             .unwrap_or_else(|| panic!("Contract not found"));
-        
+
         // Verify contract status
         if contract.status != ContractStatus::Funded {
             panic!("Contract must be in Funded status to release milestones");
         }
-        
+
         // Validate milestone ID
         if milestone_id >= contract.milestones.len() {
             panic!("Invalid milestone ID");
         }
-        
+
         let milestone = contract.milestones.get(milestone_id).unwrap();
-        
+
         // Check if milestone already released
         if milestone.released {
             panic!("Milestone already released");
         }
-        
+
         // Check if milestone has sufficient approvals
         let has_sufficient_approval = match contract.release_auth {
-            ReleaseAuthorization::ClientOnly => {
-                milestone.approved_by.clone().map_or(false, |addr| addr == contract.client)
-            },
+            ReleaseAuthorization::ClientOnly => milestone
+                .approved_by
+                .clone()
+                .map_or(false, |addr| addr == contract.client),
             ReleaseAuthorization::ArbiterOnly => {
                 contract.arbiter.clone().map_or(false, |arbiter| {
-                    milestone.approved_by.clone().map_or(false, |addr| addr == arbiter)
+                    milestone
+                        .approved_by
+                        .clone()
+                        .map_or(false, |addr| addr == arbiter)
                 })
-            },
+            }
             ReleaseAuthorization::ClientAndArbiter => {
                 milestone.approved_by.clone().map_or(false, |addr| {
-                    addr == contract.client || 
-                    contract.arbiter.clone().map_or(false, |arbiter| addr == arbiter)
+                    addr == contract.client
+                        || contract
+                            .arbiter
+                            .clone()
+                            .map_or(false, |arbiter| addr == arbiter)
                 })
-            },
+            }
             ReleaseAuthorization::MultiSig => {
                 // For multi-sig, we'd need to track multiple approvals
                 // Simplified: require client approval for now
-                milestone.approved_by.clone().map_or(false, |addr| addr == contract.client)
-            },
+                milestone
+                    .approved_by
+                    .clone()
+                    .map_or(false, |addr| addr == contract.client)
+            }
         };
-        
+
         if !has_sufficient_approval {
             panic!("Insufficient approvals for milestone release");
         }
-        
+
         // Release milestone
         let mut updated_milestone = milestone;
         updated_milestone.released = true;
-        
+
         // Update contract
         contract.milestones.set(milestone_id, updated_milestone);
-        
+
         // Check if all milestones are released
         let all_released = contract.milestones.iter().all(|m| m.released);
         if all_released {
             contract.status = ContractStatus::Completed;
         }
-        
-        env.storage().persistent().set(&symbol_short!("contract"), &contract);
-        
+
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("contract"), &contract);
+
         // In real implementation, transfer funds to freelancer
         // For now, we'll just mark as released
-        
+
         true
     }
 
